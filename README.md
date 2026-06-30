@@ -208,6 +208,22 @@ pytest -v
 
 ---
 
+## ☁️ Deployment to Vercel
+
+The application is fully configured for deployment on **Vercel** as a serverless FastAPI application.
+
+### Setup Steps for Vercel:
+
+1. **Import the Repository**: Link your GitHub repository to a new project in your Vercel Dashboard.
+2. **Configure Environment Variables**: In your Vercel project settings, add the following environment variables:
+   - `GEMINI_API_KEY_1`: Your first Gemini API key.
+   - `GEMINI_API_KEY_2`: Your second Gemini API key.
+   - `GEMINI_MODEL`: `gemini-2.5-flash`
+3. **Deploy**: Vercel will automatically discover the `vercel.json` file, build the backend serverless function using the `@vercel/python` builder, and serve both the API endpoints and the animated frontend dashboard statically.
+
+---
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
