@@ -5,9 +5,9 @@
 [![Gemini 2.5 Flash](https://img.shields.io/badge/Gemini-2.5%20Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An autonomous multi-agent agricultural intelligence network that processes live weather forecasts, geocoding coordinates, and regional soil profiles. Powered by **Google Gemini 2.5 Flash**, it delivers highly customized, dynamic crop protection strategies and week-by-week action calendars for smallholder farmers.
+An autonomous multi-agent agricultural intelligence network that processes live weather forecasts, geocoding coordinates, and regional soil profiles. Designed for both offline rule-based coordination and online AI-driven analysis, it delivers highly customized, dynamic crop protection strategies and week-by-week action calendars for smallholder farmers.
 
-This project was built as a capstone submission for the Kaggle **"Agents for Good"** track, prioritizing data truthfulness, key rotation limits protection (free-tier safety), modular multi-agent orchestration, and a premium Glassmorphism UI.
+This project was built as a capstone submission for the Kaggle **"Agents for Good"** track, prioritizing data truthfulness, modular multi-agent orchestration, robust offline reliability, and a premium Glassmorphism UI.
 
 ---
 
@@ -32,12 +32,13 @@ This project was built as a capstone submission for the Kaggle **"Agents for Goo
    pip install -r requirements.txt
    ```
 
-4. **Set up your environment variables**:
-   Create a `.env` file in the root directory based on `.env.example` and add your Google Gemini API keys:
+4. **Configure API Keys (Optional)**:
+   By default, the application runs in **zero-config mode** and does not require any external API keys to function. If you wish to enable live AI-driven analysis, you can optionally copy `.env.example` to `.env` and add your Google Gemini keys:
    ```env
    GEMINI_API_KEY_1=your-first-key
    GEMINI_API_KEY_2=your-second-key
    ```
+   *Note: If no keys are provided, the coordinator runs seamlessly using our built-in offline agronomic engine, deriving schedules and risk levels mathematically from Open-Meteo forecasts and regional soil profiles.*
 
 5. **Start the FastAPI server**:
    ```bash
@@ -54,12 +55,10 @@ This project was built as a capstone submission for the Kaggle **"Agents for Goo
 - [Architecture & Data Flow](#-architecture--data-flow)
 - [Key Features](#-key-features)
 - [Tech Stack](#-tech-stack)
-- [Environment Variables](#-environment-variables)
 - [API Documentation](#-api-documentation)
 - [CLI Testing Tool](#-cli-testing-tool)
 - [Running Tests](#-running-tests)
 - [Security Implementations](#-security-implementations)
-- [Limitations & Future Enhancements](#-limitations--future-enhancements)
 - [License](#-license)
 
 ---
@@ -82,9 +81,6 @@ This coordinator breaks down the problem using a **modular, three-specialist age
 2. **Soil Parameter Agent**: Focuses on matching the location to regional soil profiles (pH, nutrient levels, drainage) and evaluates crop suitability and required organic amendments.
 3. **Crop Action Agent**: Synthesizes the analysis of the Weather and Soil agents into a unified, actionable 4-week calendar, resolving conflicting constraints (e.g., postponing fertilizer application if heavy rains are predicted).
 
-### 🔄 The Refinement Loop
-If the Crop Action Agent's output confidence is below the threshold (`0.6`) or if the severe weather risk is classified as **HIGH** or **EXTREME**, the orchestrator initiates a **refinement loop**. It sends the initial plan back to the Crop Action Agent with specific refinement instructions to build detailed risk-mitigation contingencies.
-
 ---
 
 ## 🏗️ Architecture & Data Flow
@@ -95,49 +91,45 @@ If the Crop Action Agent's output confidence is below the threshold (`0.6`) or i
                     (POST /api/analyze with inputs)
                                    │
                                    ▼
-                         [ FastAPI Backend ]
+                          [ FastAPI Backend ]
                                    │
-                      (Validates & Sanitizes Input)
-                                   │
-                                   ▼
-                       [ Agent Orchestrator ]
-                                   │
-          ┌────────────────────────┴────────────────────────┐
-          │ (Concurrently via asyncio.gather)               │
-          ▼                                                 ▼
- [ Weather Analyst Agent ]                         [ Soil Parameter Agent ]
-    ├── Nominatim (Geocoding)                         └── Soil Profile Db
-    ├── Open-Meteo (7-Day Weather API)                   (12 Curated Regions)
-    └── Gemini 2.5 Flash                              └── Gemini 2.5 Flash
-          │                                                 │
-          │ (Weather Risk Summary)                          │ (Soil Health Summary)
-          └────────────────────────┬────────────────────────┘
+                       (Validates & Sanitizes Input)
                                    │
                                    ▼
-                        [ Crop Action Agent ]
-                           ├── Gemini 2.5 Flash
-                           └── (Synthesizes 4-Week Plan)
+                        [ Agent Orchestrator ]
                                    │
-                Is Confidence < 0.6 OR Risk HIGH/EXTREME?
-                          ├── YES ──> [ Refinement Loop ] (Capped at 2)
-                          └── NO
-                                   │
-                                   ▼
-                  [ Output Formatter (JSON Response) ]
-                                   │
-                                   ▼
-                      [ Polished UI Render / CLI ]
+           ┌────────────────────────┴────────────────────────┐
+           │ (Concurrently via asyncio.gather)               │
+           ▼                                                 ▼
+  [ Weather Analyst Agent ]                         [ Soil Parameter Agent ]
+     ├── Nominatim (Geocoding)                         └── Soil Profile Db
+     ├── Open-Meteo (7-Day Weather API)                   (12 Curated Regions)
+     └── Fallback / AI Engine                          └── Fallback / AI Engine
+           │                                                 │
+           │ (Weather Risk Summary)                          │ (Soil Health Summary)
+           └────────────────────────┬────────────────────────┘
+                                    │
+                                    ▼
+                         [ Crop Action Agent ]
+                            ├── Fallback / AI Engine
+                            └── (Synthesizes 4-Week Plan)
+                                    │
+                                    ▼
+                   [ Output Formatter (JSON Response) ]
+                                    │
+                                    ▼
+                       [ Polished UI Render / CLI ]
 ```
 
 ---
 
 ## 🎨 Key Features
 
-- **Dual API Key Rotation**: Alternates dynamically between `GEMINI_API_KEY_1` and `GEMINI_API_KEY_2` across requests, doubling the free-tier quota limits (15 RPM / 1,500 RPD safety).
-- **Verified & Disclaimer-Free Advice**: Configured prompt templates to enforce 100% true, authentic agronomic information. The models are prohibited from outputting speculative risk disclaimers (like "consult a local agronomist").
-- **Dynamic Rule-Based Fallbacks**: If both keys fail or are throttled (429 errors), the backend automatically runs a custom local generator, calculating risk profiles and crop schedules mathematically from Open-Meteo and the regional soil database.
-- **Parallel Agent Execution**: Concurrently runs Weather and Soil analyses, cutting LLM latency in half.
-- **Modern responsive UI with 10 Premium Animations**: 
+- **Zero-Config Offline Fallbacks**: Works out-of-the-box without requiring API keys or cloud hosting by executing local agronomic calculation tables.
+- **Dual API Key Rotation (Optional)**: If keys are supplied, it alternates dynamically between `GEMINI_API_KEY_1` and `GEMINI_API_KEY_2` across requests, doubling the free-tier quota limits (15 RPM / 1,500 RPD safety).
+- **Verified & Disclaimer-Free Advice**: Configured templates to enforce 100% true, authentic agronomic information. The models are prohibited from outputting speculative risk disclaimers (like "consult a local agronomist").
+- **Parallel Agent Execution**: Concurrently runs Weather and Soil analyses, cutting latency in half.
+- **Modern Responsive UI with Premium Animations**: 
   - Onload landing header slide-downs, form slide-ups, and particle entries.
   - Interactive glassmorphic hover card lifts.
   - Sequential timeline fade reveals and flowing loading bar steps.
@@ -150,7 +142,7 @@ If the Crop Action Agent's output confidence is below the threshold (`0.6`) or i
 
 - **Backend Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.10+)
 - **WSGI/ASGI Server**: [Uvicorn](https://www.uvicorn.org/)
-- **AI Model**: [Google Gemini 2.5 Flash](https://deepmind.google/technologies/gemini/) (via `google-generativeai` SDK)
+- **AI Model Support**: [Google Gemini 2.5 Flash](https://deepmind.google/technologies/gemini/) (via `google-generativeai` SDK)
 - **APIs Used**: [Open-Meteo API](https://open-meteo.com/) (Weather), [OpenStreetMap Nominatim](https://nominatim.org/) (Geocoding)
 - **Rate Limiting**: [SlowAPI](https://github.com/laurentS/slowapi) (Token bucket rate limiter)
 - **Validation**: [Pydantic v2](https://docs.pydantic.dev/latest/)
@@ -161,7 +153,7 @@ If the Crop Action Agent's output confidence is below the threshold (`0.6`) or i
 ## 🔌 API Documentation
 
 ### 1. `GET /api/health`
-Check the health status of the application and configuration.
+Check the health status of the application.
 * **Response**:
   ```json
   {
@@ -204,26 +196,10 @@ pytest -v
 2. **Strict Regex Sanitization**: User inputs are stripped of dangerous structures (e.g., HTML/Script tags, SQL keywords, and special escape sequences).
 3. **CORS Isolation**: Configured to restrict origin requests solely to configured local endpoints.
 4. **FastAPI Security Headers**: Every HTTP response is served with security headers protecting against Clickjacking, MIME sniffing, and script execution.
-5. **SlowAPI Protection**: Prevents denial of service and key quota exhaustion.
-
----
-
-## ☁️ Deployment to Vercel
-
-The application is fully configured for deployment on **Vercel** as a serverless FastAPI application.
-
-### Setup Steps for Vercel:
-
-1. **Import the Repository**: Link your GitHub repository to a new project in your Vercel Dashboard.
-2. **Configure Environment Variables**: In your Vercel project settings, add the following environment variables:
-   - `GEMINI_API_KEY_1`: Your first Gemini API key.
-   - `GEMINI_API_KEY_2`: Your second Gemini API key.
-   - `GEMINI_MODEL`: `gemini-2.5-flash`
-3. **Deploy**: Vercel will automatically discover the `vercel.json` file, build the backend serverless function using the `@vercel/python` builder, and serve both the API endpoints and the animated frontend dashboard statically.
+5. **SlowAPI Protection**: Prevents denial of service.
 
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
