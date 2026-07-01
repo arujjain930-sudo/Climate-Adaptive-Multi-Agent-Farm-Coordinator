@@ -20,15 +20,15 @@ class Settings(BaseSettings):
 
     # ── Gemini API ──────────────────────────────────────────────────────
     gemini_api_key_1: str = Field(
-        ...,  # required — will raise on startup if missing
+        default="",
         description="First Google Gemini API key (never hardcode this)",
     )
     gemini_api_key_2: str = Field(
-        ...,  # required — will raise on startup if missing
+        default="",
         description="Second Google Gemini API key (never hardcode this)",
     )
     gemini_api_key: str | None = Field(
-        default=None,
+        default="",
         description="Google Gemini API key fallback for backward compatibility",
     )
     gemini_model: str = Field(
