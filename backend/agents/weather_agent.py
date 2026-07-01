@@ -39,26 +39,41 @@ class WeatherAnalystAgent(BaseAgent):
           - ``raw_weather``: the data from the weather API / fallback
           - ``analysis``: Gemini's structured interpretation
         """
-        # ── Step 1: Fetch weather data ──────────────────────────────
-        logger.info("[%s] Fetching weather for '%s'", self.agent_name, location)
-        raw_weather = await fetch_weather(location)
-
-        # ── Step 2: Build prompt and call Gemini ────────────────────
-        prompt = WEATHER_ANALYSIS_PROMPT.format(
-            crop_type=crop_type,
-            location=location,
-            weather_data=json.dumps(raw_weather, indent=2, default=str),
-        )
-
+        raw_weather = {}
         try:
+            # ── Step 1: Fetch weather data ──────────────────────────────
+            logger.info("[%s] Fetching weather for '%s'", self.agent_name, location)
+            raw_weather = await fetch_weather(location)
+
+            # ── Step 2: Build prompt and call Gemini ────────────────────
+            prompt = WEATHER_ANALYSIS_PROMPT.format(
+                crop_type=crop_type,
+                location=location,
+                weather_data=json.dumps(raw_weather, indent=2, default=str),
+            )
+
             raw_response = await self.call_gemini(prompt)
             # Create a localized fallback on the fly if parse fails
             local_fallback = get_dynamic_weather_fallback(location, crop_type, raw_weather)
             analysis = self.parse_json_response(raw_response, fallback=local_fallback)
         except Exception as exc:
-            logger.error("[%s] Gemini interpretation failed: %s", self.agent_name, exc)
+            logger.error("[%s] Weather agent run encountered an error: %s", self.agent_name, exc)
+            raw_weather = {
+                "source": "fatal_fallback",
+                "note": f"Fatal execution failure: {exc}",
+                "location_resolved": location,
+                "temperature_avg_c": 28.0,
+                "temperature_max_c": 34.0,
+                "temperature_min_c": 22.0,
+                "relative_humidity_avg_pct": 65.0,
+                "total_precipitation_mm": 12.0,
+                "max_wind_speed_kmh": 15.0,
+                "severe_weather_risk": "UNKNOWN",
+                "forecast_days": 7,
+                "daily_summary": [],
+            }
             analysis = get_dynamic_weather_fallback(location, crop_type, raw_weather)
-            analysis["error"] = str(exc)
+            analysis["error"] = f"Fatal run exception: {exc}"
 
         # Ensure confidence key exists
         if "confidence" not in analysis:
@@ -70,11 +85,11 @@ class WeatherAnalystAgent(BaseAgent):
         }
 
 def get_dynamic_weather_fallback(location: str, crop_type: str, raw_weather: dict[str, Any]) -> dict[str, Any]:
-    temp_max = raw_weather.get("temperature_max_c", 25.0)
-    temp_min = raw_weather.get("temperature_min_c", 15.0)
-    precip = raw_weather.get("total_precipitation_mm", 0.0)
-    wind = raw_weather.get("max_wind_speed_kmh", 10.0)
-    severe_risk = str(raw_weather.get("severe_weather_risk", "LOW")).upper()
+    temp_max = raw_weather.get("temperature_max_c") or 25.0
+    temp_min = raw_weather.get("temperature_min_c") or 15.0
+    precip = raw_weather.get("total_precipitation_mm") or 0.0
+    wind = raw_weather.get("max_wind_speed_kmh") or 10.0
+    severe_risk = str(raw_weather.get("severe_weather_risk") or "LOW").upper()
 
     risks = []
     precautions = []

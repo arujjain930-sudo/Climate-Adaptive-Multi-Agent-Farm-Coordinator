@@ -64,3 +64,61 @@ async def test_gemini_api_failure_crop_agent_fallback():
         assert result["plan"]["risk_level"] in ("LOW", "MODERATE", "HIGH", "EXTREME")
         assert "error" in result["plan"]
         assert result["plan"]["confidence"] == 0.5
+
+def test_parse_json_response_verifies_dict():
+    # Test that parse_json_response returns fallback if JSON is valid but not a dict (e.g. list, string)
+    agent = WeatherAnalystAgent()
+    fallback = {"custom": "fallback"}
+    
+    # 1. Direct parse is a list
+    res = agent.parse_json_response("[1, 2, 3]", fallback=fallback)
+    assert res == fallback
+    
+    # 2. Markdown fence is a list
+    res = agent.parse_json_response("```json\n[1, 2, 3]\n```", fallback=fallback)
+    assert res == fallback
+
+    # 3. Direct parse is a dict (should succeed)
+    res = agent.parse_json_response('{"foo": "bar"}', fallback=fallback)
+    assert res == {"foo": "bar"}
+
+@pytest.mark.asyncio
+async def test_weather_agent_fatal_exception_handling():
+    # Force run method to fail before call_gemini (e.g., fetch_weather raises TypeError)
+    with patch("backend.agents.weather_agent.fetch_weather", side_effect=TypeError("Unexpected Type Error")):
+        agent = WeatherAnalystAgent()
+        result = await agent.run(location="Pune, India", crop_type="Rice")
+        # Should gracefully return a fallback dict and not raise the TypeError
+        assert result["raw_weather"]["source"] == "fatal_fallback"
+        assert "error" in result["analysis"]
+        assert "Fatal run exception" in result["analysis"]["error"]
+        assert result["analysis"]["confidence"] == 0.0
+
+@pytest.mark.asyncio
+async def test_soil_agent_fatal_exception_handling():
+    # Force run method to fail before call_gemini (e.g., get_soil_profile raises KeyError)
+    with patch("backend.agents.soil_agent.get_soil_profile", side_effect=KeyError("Missing Key")):
+        agent = SoilParameterAgent()
+        result = await agent.run(location="Pune, India", crop_type="Rice")
+        # Should gracefully return a fallback dict and not raise the KeyError
+        assert result["raw_soil"]["match_quality"] == "global_default"
+        assert "error" in result["analysis"]
+        assert "Fatal run exception" in result["analysis"]["error"]
+        assert result["analysis"]["confidence"] == 0.0
+
+@pytest.mark.asyncio
+async def test_crop_agent_fatal_exception_handling():
+    # Force run/refine method to fail by having json.dumps throw a ValueError
+    with patch("json.dumps", side_effect=ValueError("Formatting error")):
+        agent = CropActionAgent()
+        result = await agent.run(
+            location="Pune, India",
+            crop_type="Rice",
+            farming_goal="Water Conservation",
+            notes="",
+            weather_summary={"overall_risk": "LOW"},
+            soil_summary={"ph_range": "6.0–7.5", "soil_type": "Loam"}
+        )
+        assert "error" in result["plan"]
+        assert "Fatal run exception" in result["plan"]["error"]
+        assert result["plan"]["confidence"] == 0.0

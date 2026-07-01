@@ -176,8 +176,11 @@ class BaseAgent:
         error dict) so the pipeline never crashes on bad model output.
         """
         # Attempt 1: direct parse
+        # Attempt 1: direct parse
         try:
-            return json.loads(raw)
+            val = json.loads(raw)
+            if isinstance(val, dict):
+                return val
         except json.JSONDecodeError:
             pass
 
@@ -185,7 +188,9 @@ class BaseAgent:
         match = _JSON_BLOCK_RE.search(raw)
         if match:
             try:
-                return json.loads(match.group(1))
+                val = json.loads(match.group(1))
+                if isinstance(val, dict):
+                    return val
             except json.JSONDecodeError:
                 pass
 
@@ -193,7 +198,9 @@ class BaseAgent:
         try:
             start = raw.index("{")
             end = raw.rindex("}") + 1
-            return json.loads(raw[start:end])
+            val = json.loads(raw[start:end])
+            if isinstance(val, dict):
+                return val
         except (ValueError, json.JSONDecodeError):
             pass
 

@@ -14,11 +14,11 @@ def generate_dynamic_fallback(
     soil_data: dict[str, Any]
 ) -> dict[str, Any]:
     # 1. Determine weather risks dynamically
-    temp_max = weather_data.get("temperature_max_c", 25.0)
-    temp_min = weather_data.get("temperature_min_c", 15.0)
-    precip = weather_data.get("total_precipitation_mm", 0.0)
-    wind = weather_data.get("max_wind_speed_kmh", 10.0)
-    severe_risk = str(weather_data.get("severe_weather_risk", "LOW")).upper()
+    temp_max = weather_data.get("temperature_max_c") or 25.0
+    temp_min = weather_data.get("temperature_min_c") or 15.0
+    precip = weather_data.get("total_precipitation_mm") or 0.0
+    wind = weather_data.get("max_wind_speed_kmh") or 10.0
+    severe_risk = str(weather_data.get("severe_weather_risk") or "LOW").upper()
 
     weather_risks = []
     weather_precautions = []
@@ -60,11 +60,11 @@ def generate_dynamic_fallback(
         overall_weather_risk = "MODERATE"
 
     # 2. Determine soil assessment dynamically
-    soil_type = soil_data.get("soil_type", "Loam")
-    ph_str = soil_data.get("ph_range", "6.0–7.0")
-    drainage = soil_data.get("drainage_quality", "moderate").lower()
-    fertility = soil_data.get("fertility_rating", "medium").lower()
-    salinity = soil_data.get("salinity_risk", "low").lower()
+    soil_type = soil_data.get("soil_type") or "Loam"
+    ph_str = soil_data.get("ph_range") or "6.0–7.0"
+    drainage = str(soil_data.get("drainage_quality") or "moderate").lower()
+    fertility = str(soil_data.get("fertility_rating") or "medium").lower()
+    salinity = str(soil_data.get("salinity_risk") or "low").lower()
 
     # pH parsing
     ph_val = 6.5

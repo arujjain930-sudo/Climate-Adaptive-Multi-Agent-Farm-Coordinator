@@ -39,26 +39,41 @@ class SoilParameterAgent(BaseAgent):
           - ``raw_soil``: the rule-based soil profile
           - ``analysis``: Gemini's structured interpretation
         """
-        # ── Step 1: Look up soil profile ────────────────────────────
-        logger.info("[%s] Looking up soil for '%s' / '%s'", self.agent_name, location, crop_type)
-        raw_soil = get_soil_profile(location, crop_type)
-
-        # ── Step 2: Build prompt and call Gemini ────────────────────
-        prompt = SOIL_ANALYSIS_PROMPT.format(
-            crop_type=crop_type,
-            location=location,
-            soil_data=json.dumps(raw_soil, indent=2, default=str),
-            match_quality=raw_soil.get("match_quality", "unknown"),
-        )
-
+        raw_soil = {}
         try:
+            # ── Step 1: Look up soil profile ────────────────────────────
+            logger.info("[%s] Looking up soil for '%s' / '%s'", self.agent_name, location, crop_type)
+            raw_soil = get_soil_profile(location, crop_type)
+
+            # ── Step 2: Build prompt and call Gemini ────────────────────
+            prompt = SOIL_ANALYSIS_PROMPT.format(
+                crop_type=crop_type,
+                location=location,
+                soil_data=json.dumps(raw_soil, indent=2, default=str),
+                match_quality=raw_soil.get("match_quality", "unknown"),
+            )
+
             raw_response = await self.call_gemini(prompt)
             local_fallback = get_dynamic_soil_fallback(raw_soil, crop_type)
             analysis = self.parse_json_response(raw_response, fallback=local_fallback)
         except Exception as exc:
-            logger.error("[%s] Gemini interpretation failed: %s", self.agent_name, exc)
+            logger.error("[%s] Soil agent run encountered an error: %s", self.agent_name, exc)
+            raw_soil = {
+                "soil_type": "Loam (estimated)",
+                "ph_range": "6.0–7.5",
+                "organic_matter_pct": 1.5,
+                "nitrogen_level": "medium",
+                "phosphorus_level": "medium",
+                "potassium_level": "medium",
+                "moisture_pct": 30,
+                "drainage_quality": "moderate",
+                "fertility_rating": "medium",
+                "salinity_risk": "low",
+                "notes": f"Fatal execution failure: {exc}",
+                "match_quality": "global_default",
+            }
             analysis = get_dynamic_soil_fallback(raw_soil, crop_type)
-            analysis["error"] = str(exc)
+            analysis["error"] = f"Fatal run exception: {exc}"
 
         # Ensure confidence key exists
         if "confidence" not in analysis:
@@ -71,11 +86,11 @@ class SoilParameterAgent(BaseAgent):
 
 
 def get_dynamic_soil_fallback(raw_soil: dict[str, Any], crop_type: str) -> dict[str, Any]:
-    soil_type = raw_soil.get("soil_type", "Loam")
-    ph = raw_soil.get("ph_range", "6.5")
-    drainage = raw_soil.get("drainage_quality", "good")
-    fertility = raw_soil.get("fertility_rating", "medium")
-    salinity = raw_soil.get("salinity_risk", "low")
+    soil_type = raw_soil.get("soil_type") or "Loam"
+    ph = raw_soil.get("ph_range") or "6.5"
+    drainage = raw_soil.get("drainage_quality") or "good"
+    fertility = raw_soil.get("fertility_rating") or "medium"
+    salinity = raw_soil.get("salinity_risk") or "low"
 
     # Assess pH
     ph_val = 6.5
