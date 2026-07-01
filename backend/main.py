@@ -68,11 +68,11 @@ app.state.limiter = limiter
 
 # ── Middleware (order matters: last added = first executed) ───────────────
 
-# 1. CORS — only allow configured origins
+# 1. CORS — allow all origins for public serverless deployment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.origins_list,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -250,15 +250,18 @@ async def analyze(request: Request, body: AnalyzeRequest) -> JSONResponse:
 # from a single process.  This must come AFTER the API routes so that
 # /api/* paths are matched first.
 
-_frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
-if _frontend_dir.is_dir():
-    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
-    logger.info("Serving frontend static files from %s", _frontend_dir)
+if not os.environ.get("VERCEL"):
+    _frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+    if _frontend_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
+        logger.info("Serving frontend static files from %s", _frontend_dir)
+    else:
+        logger.warning(
+            "Frontend directory not found at %s — static file serving disabled.",
+            _frontend_dir,
+        )
 else:
-    logger.warning(
-        "Frontend directory not found at %s — static file serving disabled.",
-        _frontend_dir,
-    )
+    logger.info("Running on Vercel — static files are served directly via Vercel CDN.")
 
 
 # ── Dev Server ───────────────────────────────────────────────────────────

@@ -16,15 +16,31 @@ from typing import Any
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from backend.config import get_settings
 
 logger = logging.getLogger("farm_coordinator.security")
 
+
+def safe_get_remote_address(request: Request) -> str:
+    """
+    Safely extract the client IP address, falling back to proxy headers
+    if request.client is None (common in serverless environments like Vercel).
+    """
+    for header in ["x-forwarded-for", "x-real-ip"]:
+        val = request.headers.get(header)
+        if val:
+            return val.split(",")[0].strip()
+            
+    if request.client and hasattr(request.client, "host") and request.client.host:
+        return request.client.host
+        
+    return "127.0.0.1"
+
+
 # ── Rate Limiter Singleton ───────────────────────────────────────────────
 # Keyed by client IP; the limit string comes from settings.
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=safe_get_remote_address)
 
 
 def get_limiter() -> Limiter:
