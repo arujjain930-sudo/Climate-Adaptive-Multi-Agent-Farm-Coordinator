@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -148,8 +149,11 @@ async def run_pipeline(
 
     # ── Step 3: Refinement loop ──────────────────────────────────────
     # Re-run the Crop Action Agent if confidence is low or risk is high.
+    # On serverless platforms (Vercel), skip refinement to stay within timeout.
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    max_refine = 0 if is_serverless else settings.max_refinement_iterations
     iteration = 0
-    while iteration < settings.max_refinement_iterations:
+    while iteration < max_refine:
         needs_refinement, reason = _needs_refinement(plan, settings.confidence_threshold)
         if not needs_refinement:
             break
@@ -269,8 +273,9 @@ def _build_frontend_response(result: dict[str, Any]) -> dict[str, Any]:
 
     # Headline recommendation
     key_rec = "Follow the weekly crop protection and irrigation schedule."
-    if crop_plan.get("immediate_actions"):
-        key_rec = crop_plan["immediate_actions"][0]
+    immediate = crop_plan.get("immediate_actions")
+    if isinstance(immediate, list) and len(immediate) > 0:
+        key_rec = str(immediate[0])
 
     return {
         "status": "success",
