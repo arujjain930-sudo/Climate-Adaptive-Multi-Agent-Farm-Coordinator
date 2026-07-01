@@ -52,10 +52,16 @@ class WeatherAnalystAgent(BaseAgent):
                 weather_data=json.dumps(raw_weather, indent=2, default=str),
             )
 
-            raw_response = await self.call_gemini(prompt)
-            # Create a localized fallback on the fly if parse fails
-            local_fallback = get_dynamic_weather_fallback(location, crop_type, raw_weather)
-            analysis = self.parse_json_response(raw_response, fallback=local_fallback)
+            try:
+                raw_response = await self.call_gemini(prompt)
+                # Create a localized fallback on the fly if parse fails
+                local_fallback = get_dynamic_weather_fallback(location, crop_type, raw_weather)
+                analysis = self.parse_json_response(raw_response, fallback=local_fallback)
+            except Exception as exc:
+                logger.error("[%s] Gemini interpretation failed: %s", self.agent_name, exc)
+                analysis = get_dynamic_weather_fallback(location, crop_type, raw_weather)
+                analysis["error"] = str(exc)
+                analysis["confidence"] = 0.5
         except Exception as exc:
             logger.error("[%s] Weather agent run encountered an error: %s", self.agent_name, exc)
             raw_weather = {
@@ -74,6 +80,7 @@ class WeatherAnalystAgent(BaseAgent):
             }
             analysis = get_dynamic_weather_fallback(location, crop_type, raw_weather)
             analysis["error"] = f"Fatal run exception: {exc}"
+            analysis["confidence"] = 0.0
 
         # Ensure confidence key exists
         if "confidence" not in analysis:

@@ -55,17 +55,29 @@ class CropActionAgent(BaseAgent):
                 soil_summary=json.dumps(soil_summary, indent=2, default=str),
             )
 
-            raw_response = await self.call_gemini(prompt)
-            local_fallback = None
-            if raw_weather and raw_soil:
-                local_fallback = generate_dynamic_fallback(
+            try:
+                raw_response = await self.call_gemini(prompt)
+                local_fallback = None
+                if raw_weather and raw_soil:
+                    local_fallback = generate_dynamic_fallback(
+                        location=location,
+                        crop_type=crop_type,
+                        farming_goal=farming_goal,
+                        weather_data=raw_weather,
+                        soil_data=raw_soil
+                    )
+                plan = self.parse_json_response(raw_response, fallback=local_fallback)
+            except Exception as exc:
+                logger.error("[%s] Gemini plan generation failed: %s", self.agent_name, exc)
+                plan = generate_dynamic_fallback(
                     location=location,
                     crop_type=crop_type,
                     farming_goal=farming_goal,
                     weather_data=raw_weather,
                     soil_data=raw_soil
                 )
-            plan = self.parse_json_response(raw_response, fallback=local_fallback)
+                plan["error"] = str(exc)
+                plan["confidence"] = 0.5
         except Exception as exc:
             logger.error("[%s] CropActionAgent run encountered an error: %s", self.agent_name, exc)
             plan = generate_dynamic_fallback(
@@ -76,6 +88,7 @@ class CropActionAgent(BaseAgent):
                 soil_data=raw_soil
             )
             plan["error"] = f"Fatal run exception: {exc}"
+            plan["confidence"] = 0.0
 
         # Ensure required keys exist
         if "confidence" not in plan:
